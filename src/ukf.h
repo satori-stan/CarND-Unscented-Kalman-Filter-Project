@@ -13,6 +13,10 @@ using Eigen::VectorXd;
 class UKF {
 public:
 
+  ///* Useful values
+  const double kPI = 3.14159265358979323846264338328;
+  const double k2PI = 2*kPI;
+
   ///* initially set to false, set to true in first call of ProcessMeasurement
   bool is_initialized_;
 
@@ -21,6 +25,21 @@ public:
 
   ///* if this is false, radar measurements will be ignored (except for init)
   bool use_radar_;
+
+  ///* time when the state is true, in us
+  long long time_us_;
+
+  ///* State dimension
+  int n_x_;
+
+  ///* Augmented state dimension
+  int n_aug_;
+
+  ///* Number of sigma points
+  int n_sig_;
+
+  ///* Sigma point spreading parameter
+  double lambda_;
 
   ///* state vector: [pos1 pos2 vel_abs yaw_angle yaw_rate] in SI units and rad
   VectorXd x_;
@@ -31,8 +50,8 @@ public:
   ///* predicted sigma points matrix
   MatrixXd Xsig_pred_;
 
-  ///* time when the state is true, in us
-  long long time_us_;
+  ///* Weights of sigma points
+  VectorXd weights_;
 
   ///* Process noise standard deviation longitudinal acceleration in m/s^2
   double std_a_;
@@ -54,19 +73,6 @@ public:
 
   ///* Radar measurement noise standard deviation radius change in m/s
   double std_radrd_ ;
-
-  ///* Weights of sigma points
-  VectorXd weights_;
-
-  ///* State dimension
-  int n_x_;
-
-  ///* Augmented state dimension
-  int n_aug_;
-
-  ///* Sigma point spreading parameter
-  double lambda_;
-
 
   /**
    * Constructor

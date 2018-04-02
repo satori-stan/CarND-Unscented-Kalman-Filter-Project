@@ -2,8 +2,9 @@ project(UnscentedKF)
 
 cmake_minimum_required (VERSION 3.5)
 
-add_definitions(-std=c++11)
+#add_definitions(-std=c++11)
 
+set(CMAKE_CXX_STANDARD 11)
 set(CXX_FLAGS "-Wall")
 set(CMAKE_CXX_FLAGS, "${CXX_FLAGS}")
 
@@ -23,4 +24,11 @@ endif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 
 add_executable(UnscentedKF ${sources})
 
-target_link_libraries(UnscentedKF z ssl uv uWS)
+if(${CMAKE_SYSTEM_NAME} MATCHES "Windows") 
+  # At least if using vcpkg
+  target_link_libraries(UnscentedKF zlib ssleay32 libuv uWS)
+
+else(${CMAKE_SYSTEM_NAME} MATCHES "Windows") 
+  target_link_libraries(UnscentedKF z ssl uv uWS)
+
+endif(${CMAKE_SYSTEM_NAME} MATCHES "Windows") 
