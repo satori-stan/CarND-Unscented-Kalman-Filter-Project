@@ -93,7 +93,7 @@ void UKF::ProcessMeasurement(MeasurementPackage measurement_pack) {
       double phi_cos = cos(phi);
       double phi_sin = sin(phi);
       // The lectures say we shouldn't use ro_dot to initialize velocity.
-      x_ << ro * phi_cos, ro * phi_sin, 0, 0;
+      x_ << ro * phi_cos, ro * phi_sin, 0, 0, 0;
     }
     else if (measurement_pack.sensor_type_ == MeasurementPackage::LASER) {
       /**
@@ -101,6 +101,7 @@ void UKF::ProcessMeasurement(MeasurementPackage measurement_pack) {
       */
       x_ << measurement_pack.raw_measurements_(0),
             measurement_pack.raw_measurements_(1),
+            0,
             0,
             0;
     }
@@ -263,8 +264,8 @@ void UKF::Prediction(double delta_t) {
   P_.setZero();
   for (int i = 0; i < n_sig_; ++i) {
     MatrixXd x_diff = Xsig_pred_.col(i) - x_;
-    double theta = x_diff(3);
-    x_diff(3) = theta - (k2PI * floor((theta + kPI) / k2PI));
+    //double theta = x_diff(3);
+    x_diff(3) = NormalizeAngle(x_diff(3)); // theta - (k2PI * floor((theta + kPI) / k2PI));
     P_ = P_ + weights_(i) * x_diff * x_diff.transpose();
   }
 
@@ -319,6 +320,7 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   // calculate innovation covariance matrix S
   for (int i = 0; i < n_sig_; ++i) {
     MatrixXd Y = Zsig.col(i) - z_pred;
+    Y(1) = NormalizeAngle(Y(1));
     S += (weights_(i) * Y * Y.transpose()); // + R;
   }
   S += R;
@@ -337,6 +339,8 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   //update state mean and covariance matrix
   x_ = x_ + K * (meas_package.raw_measurements_ - z_pred);
   P_ = P_ - K * S * K.transpose();
+
+  // TODO: Calculate NIS
 }
 
 /**
@@ -396,7 +400,7 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   // calculate innovation covariance matrix S
   for (int i = 0; i < n_sig_; ++i) {
     MatrixXd Y = Zsig.col(i) - z_pred;
-    Y(1) = atan2(sin(Y(1)), cos(Y(1)));  // Normalize angle
+    Y(1) = NormalizeAngle(Y(1)); //atan2(sin(Y(1)), cos(Y(1)));  // Normalize angle
     S += (weights_(i) * Y * Y.transpose()); // + R;
   }
   S += R;
@@ -407,14 +411,29 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   Tc.setZero();
   //Tc =  (Xsig_pred.colwise() - x).rowwise() * weights * (Zsig.colwise() - z_pred).transpose();
   for (int i = 0; i < n_sig_; ++i) {
-    Tc +=  weights_(i) * (Xsig_pred_.col(i) - x_) *
-        (Zsig.col(i) - z_pred).transpose();
+    VectorXd x_diff = Xsig_pred_.col(i) - x_;
+    x_diff(3) = NormalizeAngle(x_diff(3));
+    VectorXd z_diff = Zsig.col(i) - z_pred;
+    z_diff(1) = NormalizeAngle(z_diff(1));
+
+    Tc +=  weights_(i) * x_diff *
+        z_diff.transpose();
   }
   // Kalman gain K;
   MatrixXd K = Tc * S.inverse();
-  //update state mean and covariance matrix
+  // update state mean and covariance matrix
   x_ = x_ + K * (meas_package.raw_measurements_ - z_pred);
   P_ = P_ - K * S * K.transpose();
 
   // TODO: Calculate NIS
+}
+
+/**
+ * Calculates an angle normalized to -PI and PI
+ * @param theta The angle in radians
+ * @returns The angle normalized between -PI and PI
+ */
+double UKF::NormalizeAngle(double theta) {
+  return atan2(sin(theta), cos(theta));
+  //return theta - (k2PI * floor((theta + kPI) / k2PI));
 }

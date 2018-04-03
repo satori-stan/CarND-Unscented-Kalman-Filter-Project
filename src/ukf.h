@@ -108,6 +108,15 @@ public:
    * @param meas_package The measurement at k+1
    */
   void UpdateRadar(MeasurementPackage meas_package);
+
+ private:
+
+  /**
+   * Calculates an angle normalized to -PI and PI
+   * @param theta The angle in radians
+   * @returns The angle normalized between -PI and PI
+   */
+  double NormalizeAngle(double theta);
 };
 
 #endif /* UKF_H */
