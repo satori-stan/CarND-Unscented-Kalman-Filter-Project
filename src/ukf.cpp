@@ -68,12 +68,6 @@ UKF::~UKF() {}
  * either radar or laser.
  */
 void UKF::ProcessMeasurement(MeasurementPackage measurement_pack) {
-  /**
-  TODO:
-
-  Complete this function! Make sure you switch between lidar and radar
-  measurements.
-  */
   double dt = (measurement_pack.timestamp_ - time_us_)/1000000.;
   time_us_ = measurement_pack.timestamp_;
 
@@ -115,21 +109,6 @@ void UKF::ProcessMeasurement(MeasurementPackage measurement_pack) {
    *  Prediction
    ****************************************************************************/
 
-  /*
-  ekf_.F_(0, 2) = ekf_.F_(1, 3) = dt;
-
-  const float noise_ax = 9.F;
-  const float noise_ay = 9.F;
-
-  double dt_4_by_4 = pow(dt, 4.0)/4.0;
-  double dt_3_by_2 = pow(dt, 3.0)/2.0;
-  double dt_2 = pow(dt, 2);
-  ekf_.Q_ << dt_4_by_4*noise_ax, 0, dt_3_by_2*noise_ax, 0,
-            0, dt_4_by_4*noise_ay, 0, dt_3_by_2*noise_ay,
-            dt_3_by_2*noise_ax, 0, dt_2*noise_ax, 0,
-            0, dt_3_by_2*noise_ay, 0, dt_2*noise_ay;
-  */
-
   Prediction(dt);
 
   /*****************************************************************************
@@ -139,18 +118,10 @@ void UKF::ProcessMeasurement(MeasurementPackage measurement_pack) {
   if (measurement_pack.sensor_type_ == MeasurementPackage::RADAR &&
       use_radar_) {
     // Radar updates
-    /*
-    Hj_ = tools.CalculateJacobian(ekf_.x_);
-    ekf_.H_ = Hj_;
-    ekf_.R_ = R_radar_;
-    */
     UpdateRadar(measurement_pack);
+
   } else if (use_laser_) {
     // Laser updates
-    /*
-    ekf_.H_ = H_laser_;
-    ekf_.R_ = R_laser_;
-    */
     UpdateLidar(measurement_pack);
   }
 
@@ -165,12 +136,6 @@ void UKF::ProcessMeasurement(MeasurementPackage measurement_pack) {
  * measurement and this one.
  */
 void UKF::Prediction(double delta_t) {
-  /**
-  TODO:
-
-  Complete this function! Estimate the object's location. Modify the state
-  vector, x_. Predict sigma points, the state, and the state covariance matrix.
-  */
   // 1. Generate Sigma points for current state (previous observation)
 
   // augmented mean vector
