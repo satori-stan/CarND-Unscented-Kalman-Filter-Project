@@ -20,7 +20,7 @@ UKF::UKF() :
     // TODO: Find out what we are doing with time_us_
     // Process noise standard deviation longitudinal acceleration in m/s^2
     // TODO: Review initialization, should probably be a constructor param
-    std_a_(6),
+    std_a_(3), // for a max acceleration of 6 m/s2
     // Process noise standard deviation yaw acceleration in rad/s^2
     // TODO: Review initialization, should probably be a constructor param
     std_yawdd_(kPI / 16),
@@ -276,14 +276,6 @@ void UKF::Prediction(double delta_t) {
  * @param {MeasurementPackage} meas_package
  */
 void UKF::UpdateLidar(MeasurementPackage meas_package) {
-  /**
-  TODO:
-
-  Complete this function! Use lidar data to update the belief about the object's
-  position. Modify the state vector, x_, and covariance, P_.
-
-  You'll also need to calculate the lidar NIS.
-  */
   // 1. Predict measurement
   // set measurement dimension, lidar can measure px and py
   int n_z = 2;
@@ -317,30 +309,28 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
     z_pred += weights_(i) * Zsig.col(i);
   }
 
-  // calculate innovation covariance matrix S
-  for (int i = 0; i < n_sig_; ++i) {
-    MatrixXd Y = Zsig.col(i) - z_pred;
-    Y(1) = NormalizeAngle(Y(1));
-    S += (weights_(i) * Y * Y.transpose()); // + R;
-  }
-  S += R;
-
   // 2. Update state
+  // calculate innovation covariance matrix S
   // matrix for cross correlation of sigma points Tc
   MatrixXd Tc = MatrixXd(n_x_, n_z);
   Tc.setZero();
-  //Tc =  (Xsig_pred.colwise() - x).rowwise() * weights * (Zsig.colwise() - z_pred).transpose();
   for (int i = 0; i < n_sig_; ++i) {
-    Tc +=  weights_(i) * (Xsig_pred_.col(i) - x_) *
-        (Zsig.col(i) - z_pred).transpose();
+    MatrixXd z_diff = Zsig.col(i) - z_pred;
+    z_diff(1) = NormalizeAngle(z_diff(1));
+    S += weights_(i) * z_diff * z_diff.transpose();
+    Tc += weights_(i) * (Xsig_pred_.col(i) - x_) * z_diff.transpose();
   }
+  S += R;
+
   // Kalman gain K;
   MatrixXd K = Tc * S.inverse();
-  //update state mean and covariance matrix
-  x_ = x_ + K * (meas_package.raw_measurements_ - z_pred);
+  // update state mean and covariance matrix
+  VectorXd y = (meas_package.raw_measurements_ - z_pred);
+  x_ = x_ + K * y;
   P_ = P_ - K * S * K.transpose();
 
-  // TODO: Calculate NIS
+  // Calculate NIS
+  std::cout << "Lidar NIS: " << y.transpose() * S.inverse() * y << std::endl;
 }
 
 /**
@@ -348,15 +338,6 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
  * @param {MeasurementPackage} meas_package
  */
 void UKF::UpdateRadar(MeasurementPackage meas_package) {
-  /**
-  TODO:
-
-  Complete this function! Use radar data to update the belief about the object's
-  position. Modify the state vector, x_, and covariance, P_.
-
-  You'll also need to calculate the radar NIS.
-  */
-
   // 1. Predict measurement
   // set measurement dimension, radar can measure r, phi, and r_dot
   int n_z = 3;
@@ -397,35 +378,32 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
     }
   }
 
-  // calculate innovation covariance matrix S
-  for (int i = 0; i < n_sig_; ++i) {
-    MatrixXd Y = Zsig.col(i) - z_pred;
-    Y(1) = NormalizeAngle(Y(1)); //atan2(sin(Y(1)), cos(Y(1)));  // Normalize angle
-    S += (weights_(i) * Y * Y.transpose()); // + R;
-  }
-  S += R;
-
   // 2. Update state
+  // calculate innovation covariance matrix S
   // matrix for cross correlation of sigma points Tc
   MatrixXd Tc = MatrixXd(n_x_, n_z);
   Tc.setZero();
-  //Tc =  (Xsig_pred.colwise() - x).rowwise() * weights * (Zsig.colwise() - z_pred).transpose();
   for (int i = 0; i < n_sig_; ++i) {
     VectorXd x_diff = Xsig_pred_.col(i) - x_;
-    x_diff(3) = NormalizeAngle(x_diff(3));
     VectorXd z_diff = Zsig.col(i) - z_pred;
+
+    x_diff(3) = NormalizeAngle(x_diff(3));
     z_diff(1) = NormalizeAngle(z_diff(1));
 
-    Tc +=  weights_(i) * x_diff *
-        z_diff.transpose();
+    S += weights_(i) * z_diff * z_diff.transpose();
+    Tc +=  weights_(i) * x_diff * z_diff.transpose();
   }
+  S += R;
+
   // Kalman gain K;
   MatrixXd K = Tc * S.inverse();
   // update state mean and covariance matrix
-  x_ = x_ + K * (meas_package.raw_measurements_ - z_pred);
+  VectorXd y = (meas_package.raw_measurements_ - z_pred);
+  x_ = x_ + K * y;
   P_ = P_ - K * S * K.transpose();
 
-  // TODO: Calculate NIS
+  // Calculate NIS
+  std::cout << "Radar NIS: " << y.transpose() * S.inverse() * y << std::endl;
 }
 
 /**
