@@ -17,7 +17,7 @@ UKF::UKF() :
     use_laser_(true),
     // if this is false, radar measurements will be ignored (except during init)
     use_radar_(true),
-    // TODO: Find out what we are doing with time_us_
+    // We don't initialize time_us_ because it is done with the initial measurement
     // Process noise standard deviation longitudinal acceleration in m/s^2
     // TODO: Review initialization, should probably be a constructor param
     std_a_(3), // for a max acceleration of 6 m/s2
@@ -34,18 +34,19 @@ UKF::UKF() :
     n_sig_(2 * n_aug_ + 1),
     // Sigma point spreading parameter
     lambda_(3 - n_aug_),
-    // initial state vector
+    // Initial state vector
     x_(VectorXd::Zero(n_x_)),
     // initial covariance matrix
     P_(MatrixXd::Identity(n_x_, n_x_)),
-    // predicted sigma points matrix
+    // Predicted sigma points matrix
     // Generic initialization since values are reset every loop
     Xsig_pred_(MatrixXd(n_x_, n_sig_)),
     // Weights of sigma points
     // Generic initialization since values are reset every loop
     weights_(VectorXd(n_sig_)),
 
-    //DO NOT MODIFY measurement noise values below these are provided by the sensor manufacturer.
+    // DO NOT MODIFY measurement noise values below these are provided by the
+    // sensor manufacturer.
     // Laser measurement noise standard deviation position1 in m
     std_laspx_(0.15),
     // Laser measurement noise standard deviation position2 in m
@@ -58,7 +59,10 @@ UKF::UKF() :
     std_radrd_(0.3) {
     //DO NOT MODIFY measurement noise values above these are provided by the sensor manufacturer.
 
-  // TODO: Set initial values of x and P here
+  // vector for weights
+  weights_.setConstant(1 / (2 * (lambda_ + n_aug_)));
+  weights_(0) = lambda_ / (lambda_ + n_aug_);
+
 }
 
 UKF::~UKF() {}
@@ -147,8 +151,7 @@ void UKF::Prediction(double delta_t) {
   x_aug.tail(aug_n) = nu;
 
   // augmented state covariance
-  MatrixXd P_aug = MatrixXd(7, 7);
-  P_aug.setZero();
+  MatrixXd P_aug = MatrixXd::Zero(n_aug_, n_aug_);
   P_aug.topLeftCorner(P_.rows(), P_.cols()) = P_;
 
   MatrixXd Q(aug_n, aug_n);
@@ -162,7 +165,7 @@ void UKF::Prediction(double delta_t) {
   MatrixXd Xsig_aug = MatrixXd(n_aug_, n_sig_);
   Xsig_aug.col(0) = x_aug;
   double factor = sqrt(lambda_ + n_aug_);
-  //for (int i = 0; i < n_aug; i++)
+
   // set sigma points as columns of matrix Xsig
   Xsig_aug.block(0, 1, n_aug_, n_aug_) = (factor*A).colwise() + x_aug;
   Xsig_aug.block(0, n_aug_+1, n_aug_, n_aug_) =
@@ -171,7 +174,6 @@ void UKF::Prediction(double delta_t) {
   // 2. Predict Sigma points for next state (current observation)
 
   // create matrix with predicted sigma points as columns
-  //MatrixXd Xsig_pred = MatrixXd(n_x_, n_sig_);
   Xsig_pred_.setZero();
   // predict sigma points
   for (int i = 0; i < n_sig_; ++i) {
@@ -214,12 +216,6 @@ void UKF::Prediction(double delta_t) {
 
   // 3. Predict mean and covariance
 
-  // vector for weights
-  //VectorXd weights = VectorXd(n_sig_);
-  weights_.setZero();
-  weights_.setConstant(1 / (2 * (lambda_ + n_aug_)));
-  weights_(0) = lambda_ / (lambda_ + n_aug_);
-
   // predicted mean state
   x_ = (Xsig_pred_ * weights_).rowwise().sum();
 
@@ -229,8 +225,7 @@ void UKF::Prediction(double delta_t) {
   P_.setZero();
   for (int i = 0; i < n_sig_; ++i) {
     MatrixXd x_diff = Xsig_pred_.col(i) - x_;
-    //double theta = x_diff(3);
-    x_diff(3) = NormalizeAngle(x_diff(3)); // theta - (k2PI * floor((theta + kPI) / k2PI));
+    x_diff(3) = NormalizeAngle(x_diff(3));
     P_ = P_ + weights_(i) * x_diff * x_diff.transpose();
   }
 
@@ -282,8 +277,9 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   for (int i = 0; i < n_sig_; ++i) {
     MatrixXd z_diff = Zsig.col(i) - z_pred;
     z_diff(1) = NormalizeAngle(z_diff(1));
-    S += weights_(i) * z_diff * z_diff.transpose();
-    Tc += weights_(i) * (Xsig_pred_.col(i) - x_) * z_diff.transpose();
+    MatrixXd z_diff_t = z_diff.transpose();
+    S += weights_(i) * z_diff * z_diff_t;
+    Tc += weights_(i) * (Xsig_pred_.col(i) - x_) * z_diff_t;
   }
   S += R;
 
@@ -355,8 +351,9 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
     x_diff(3) = NormalizeAngle(x_diff(3));
     z_diff(1) = NormalizeAngle(z_diff(1));
 
-    S += weights_(i) * z_diff * z_diff.transpose();
-    Tc +=  weights_(i) * x_diff * z_diff.transpose();
+    MatrixXd z_diff_t = z_diff.transpose();
+    S += weights_(i) * z_diff * z_diff_t;
+    Tc +=  weights_(i) * x_diff * z_diff_t;
   }
   S += R;
 
@@ -377,6 +374,9 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
  * @returns The angle normalized between -PI and PI
  */
 double UKF::NormalizeAngle(double theta) {
+  // From a hint by fernandodamasio 
+  // https://discussions.udacity.com/t/already-used-atan2-to-calculate-phi-in-hx-do-i-still-need-to-normalize-the-phi-in-y/242332/7
   return atan2(sin(theta), cos(theta));
-  //return theta - (k2PI * floor((theta + kPI) / k2PI));
+  // From a StackOverflow answer https://stackoverflow.com/a/24234924
+  // return theta - (k2PI * floor((theta + kPI) / k2PI));
 }
